@@ -34,6 +34,8 @@ namespace CenterLine
                 //窗口打开并停留，只有点击按键之后，窗口关闭并返回true
             }
 
+
+            //按键会改变window的属性，通过对属性的循环判断来实现对按键的监测
             while (!window1.Done)
             {
                 //选择平曲线
@@ -43,28 +45,15 @@ namespace CenterLine
                     //因为要对原有模型线进行一个删除是对文件进行一个删除，故要创建一个事件
                     using(Transaction transaction = new Transaction(uiDoc.Document))
                     {
-                        transaction.Start("删除平曲线");
+                        transaction.Start("移动平曲线");
 
-                        Selection sel = uiDoc.Selection;
-                        Reference ref1 = sel.PickObject(ObjectType.Element, "选择一条模型线作为平曲线");
-                        Element elem = revitDoc.GetElement(ref1);
-                        ModelLine modelLine = elem as ModelLine;
-                        //做一个判断，判断其是否为ModelNurbSpline
-                        if (modelLine == null)
-                        {
-                            ModelNurbSpline modelNurbSpline = elem as ModelNurbSpline;
-                            FlatModelLine = modelNurbSpline.GeometryCurve;
-                        }
-                        else
-                        {
-                            FlatModelLine = modelLine.GeometryCurve;
-                        }
-
+                        FlatModelLine = moveModelLine(commandData);
                         
-                        //1、清除平曲线  2、重置window1.FlatCurve
-                        uiDoc.Document.Delete(elem.Id);
+
+                        //2、重置window1.FlatCurve
+
                         window1.FlatCurve = false;
-                        //window1.Visibility = System.Windows.Visibility.Visible;
+
 
                         transaction.Commit();
                     }
@@ -83,34 +72,14 @@ namespace CenterLine
                     //因为要对原有模型线进行一个删除是对文件进行一个删除，故要创建一个事件
                     using (Transaction transaction = new Transaction(uiDoc.Document))
                     {
-                        transaction.Start("删除纵曲线");
+                        transaction.Start("移动纵曲线");
+
+                        VerticalModelLine = moveModelLine(commandData);
 
 
-                        Selection sel = uiDoc.Selection;
-                        Reference ref1 = sel.PickObject(ObjectType.Element, "选择一条模型线作为纵曲线");
-                        Element elem = revitDoc.GetElement(ref1);
-                        ModelLine modelLine = elem as ModelLine;
-
-                        //做一个判断，判断其是否为ModelNurbSpline
-                        if (modelLine == null)
-                        {
-                            ModelNurbSpline modelNurbSpline = elem as ModelNurbSpline;
-                            VerticalModelLine= modelNurbSpline.GeometryCurve;
-                        }
-                        else
-                        {
-                            VerticalModelLine = modelLine.GeometryCurve;
-                        }
-
-
-
-
-                        //VerticalModelLineSketchPlane = modelLine.SketchPlane;
-
-                        //1、清除纵曲线   2、重置window1.VerticalCurve
-                        uiDoc.Document.Delete(elem.Id);
+                        //2、重置window1.VerticalCurve
                         window1.VerticalCurve = false;
-                        //window1.Visibility = System.Windows.Visibility.Visible;
+
 
                         transaction.Commit();
                     }
@@ -145,7 +114,7 @@ namespace CenterLine
             List<XYZ> FlatCurvePointList = new List<XYZ>();
             for (int i = 0; i < 100; i +=1)
             {
-                //设置起点和终点，并创建直线
+                //设置起点和终点，并创建直线，来与原有线段相交
                 XYZ point1 = new XYZ(FlatModelLine.Evaluate(0, true).X - i*FdelX/100, FY, FlatModelLine.Evaluate(0, true).Z);
                 XYZ point2 = new XYZ(FlatModelLine.Evaluate(0, true).X - i * FdelX / 100, FY+ FLength, FlatModelLine.Evaluate(0, true).Z); 
                 Line line = Line.CreateBound(point1, point2);
@@ -182,12 +151,12 @@ namespace CenterLine
             List<XYZ> VerticalCurvePointList = new List<XYZ>()   ;
             for (int i = 0; i < 100; i += 1)
             {
-                //设置起点和终点，并创建直线
+                //设置起点和终点，并创建直线，来与原有线段相交
                 XYZ point1 = new XYZ(VerticalModelLine.Evaluate(0, true).X - i * VdelX / 100, VY, VerticalModelLine.Evaluate(0, true).Z);
                 XYZ point2 = new XYZ(VerticalModelLine.Evaluate(0, true).X - i * VdelX / 100, VY + VLength, VerticalModelLine.Evaluate(0, true).Z);
                 Line line = Line.CreateBound(point1, point2);
                 Curve curve = line as Curve;
-
+                
                 //求交点并把交点放到集里面去
                 IntersectionResultArray intersectionResultArray;
                 VerticalModelLine.Intersect(curve, out intersectionResultArray);
@@ -195,7 +164,7 @@ namespace CenterLine
                 VerticalCurvePointList.Add(xYZ);
             }
 
-            //把平曲线和总曲线上点进行整合生成三维曲线
+            //把平曲线和总曲线上点进行整合生成三维曲线，平曲线的X,Y坐标作为三维曲线X,Y坐标，总曲线Y坐标作为三维曲线Z坐标
             List<XYZ> CurvePoint = new List<XYZ>(); 
             for (int i = 0; i < 100; i += 1)
             {
@@ -203,9 +172,11 @@ namespace CenterLine
                 CurvePoint.Add(point);
             }
 
-            PolyLine.Create(CurvePoint);
+
+            PolyLine polyLine = PolyLine.Create(CurvePoint);
 
 
+            
             //让这条线以模型线的形式展示一下
 
             using (Transaction tran = new Transaction(uiDoc.Document))
@@ -226,14 +197,39 @@ namespace CenterLine
                     uiDoc.Document.Create.NewModelCurve(Line.CreateBound(PointStart, PointEnd), sketchPlane);
 
                 }
-
                 tran.Commit();
+            }
+            return Result.Succeeded;
+        }
 
+        private Curve moveModelLine(ExternalCommandData commandData)
+        {
+            Document revitDoc = commandData.Application.ActiveUIDocument.Document;  //取得文档           
+            Autodesk.Revit.ApplicationServices.Application revitApp = commandData.Application.Application;             //取得应用程序            
+            UIDocument uiDoc = commandData.Application.ActiveUIDocument;           //取得当前活动文档        
+
+            Curve curve;
+
+            Selection sel = uiDoc.Selection;
+            Reference ref1 = sel.PickObject(ObjectType.Element, "选择一条模型线作为平曲线/纵曲线");
+            Element elem = revitDoc.GetElement(ref1);
+            ModelLine modelLine = elem as ModelLine;
+            //做一个判断，判断其是否为ModelNurbSpline
+            if (modelLine == null)
+            {
+                ModelNurbSpline modelNurbSpline = elem as ModelNurbSpline;
+                curve = modelNurbSpline.GeometryCurve;
+            }
+            else
+            {
+                curve = modelLine.GeometryCurve;
             }
 
 
-
-            return Result.Succeeded;
+            //移动平曲线  
+            XYZ moveVec = new XYZ(curve.Length, curve.Length, curve.Length);
+            ElementTransformUtils.MoveElement(uiDoc.Document, elem.Id, moveVec);
+            return curve;
         }
     }
 }

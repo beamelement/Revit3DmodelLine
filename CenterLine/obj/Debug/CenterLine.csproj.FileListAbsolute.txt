@@ -75,3 +75,4 @@ C:\Users\zyx\Desktop\2RevitArcBridge\CenterLine\CenterLine\obj\Debug\CenterLine.
 C:\Users\zyx\Desktop\2RevitArcBridge\CenterLine\CenterLine\obj\Debug\CenterLine.csproj.CopyComplete
 C:\Users\zyx\Desktop\2RevitArcBridge\CenterLine\CenterLine\obj\Debug\CenterLine.dll
 C:\Users\zyx\Desktop\2RevitArcBridge\CenterLine\CenterLine\obj\Debug\CenterLine.pdb
+C:\Users\zyx\Desktop\2RevitArcBridge\CenterLine\CenterLine\obj\Debug\CenterLine.csprojAssemblyReference.cache
